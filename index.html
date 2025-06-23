@@ -171,12 +171,12 @@
             border: 1px solid #ddd;
             margin-top: 10px;
         }
-        /* أنماط جديدة لإضافة الصور */
-        #images-section {
+        /* أنماط قسم الصور */
+        #images-section, #existing-images-section {
             margin-top: 30px;
             display: none;
         }
-        #images-section h3 {
+        #images-section h3, #existing-images-section h3 {
             color: #4285F4;
             border-bottom: 2px solid #4285F4;
             padding-bottom: 10px;
@@ -228,16 +228,6 @@
         #cancel-images-btn {
             background: #EA4335;
             display: none;
-        }
-        .image-timestamp {
-            position: absolute;
-            bottom: 35px;
-            right: 5px;
-            background: rgba(0,0,0,0.7);
-            color: white;
-            padding: 3px 6px;
-            font-size: 10px;
-            border-radius: 3px;
         }
     </style>
 </head>
@@ -324,6 +314,12 @@
                 <span class="field-label">منطقة الأعمال+التشغيل:</span>
                 <input type="text" class="editable field-value" id="business-operating-area" disabled>
             </div>
+
+            <!-- قسم عرض الصور الموجودة -->
+            <div id="existing-images-section">
+                <h3>الصور التوثيقية</h3>
+                <div id="existing-images-container" class="image-upload-container"></div>
+            </div>
         </div>
         <div id="edit-controls">
             <button id="edit-btn">تعديل</button>
@@ -333,9 +329,9 @@
             <button id="add-images-btn">إضافة صور</button>
         </div>
 
-        <!-- قسم إضافة الصور -->
+        <!-- قسم إضافة الصور الجديدة -->
         <div id="images-section">
-            <h3>إضافة صور توثيقية</h3>
+            <h3>إضافة صور توثيقية جديدة</h3>
             <div class="image-upload-container">
                 <div class="image-upload-box">
                     <div class="image-preview" id="image-preview-1"></div>
@@ -372,8 +368,8 @@
     </div>
 
     <script>
-        const API_URL = "https://script.google.com/macros/s/AKfycbwbUuGbOmXEg-hKu1hCPUl_bMeq1jt075HuQo6NyylRISHIQp79C51WH9mmchyZihMr/exec"; 
-        const IMGBB_API_KEY = "6ecffd3e45da90b96112d1595746ebea"; // استبدل بمفتاح API الخاص بك
+        const API_URL = "https://script.google.com/macros/s/AKfycbxWF4m69QL_7RY03o90Jn4uqvmUSWRjFMThGp7TUkUb8FDBG4jeL_2d9WoTX7j1ViFm/exec"; 
+        const IMGBB_API_KEY = "6ecffd3e45da90b96112d1595746ebea";
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
@@ -396,6 +392,8 @@
         const saveImagesBtn = document.getElementById('save-images-btn');
         const cancelImagesBtn = document.getElementById('cancel-images-btn');
         const imagesSection = document.getElementById('images-section');
+        const existingImagesSection = document.getElementById('existing-images-section');
+        const existingImagesContainer = document.getElementById('existing-images-container');
 
         let stream = null;
         let scanning = false;
@@ -403,7 +401,6 @@
         let currentBarcode = "";
         let currentPdfUrl = "";
         let uploadedImages = [null, null, null];
-        let imageTimestamps = [null, null, null];
 
         // تهيئة أحداث الصور
         for (let i = 1; i <= 3; i++) {
@@ -416,24 +413,6 @@
                     reader.onload = function(event) {
                         preview.style.backgroundImage = `url(${event.target.result})`;
                         uploadedImages[i-1] = e.target.files[0];
-                        
-                        // إضافة طابع زمني للصورة
-                        const now = new Date();
-                        const formattedTime = formatDateTime(now);
-                        imageTimestamps[i-1] = formattedTime;
-                        
-                        // عرض الطابع الزمني
-                        const timestampElement = document.createElement('div');
-                        timestampElement.className = 'image-timestamp';
-                        timestampElement.textContent = formattedTime;
-                        
-                        // إزالة أي طابع زمني سابق
-                        const existingTimestamp = preview.querySelector('.image-timestamp');
-                        if (existingTimestamp) {
-                            preview.removeChild(existingTimestamp);
-                        }
-                        
-                        preview.appendChild(timestampElement);
                     };
                     reader.readAsDataURL(e.target.files[0]);
                 }
@@ -478,7 +457,6 @@
                         if (result.success) {
                             imageUrls.push({
                                 url: result.data.url,
-                                timestamp: imageTimestamps[i],
                                 description: `صورة ${i+1} للمعدة`
                             });
                         } else {
@@ -503,6 +481,8 @@
                 if (result.status === "success") {
                     alert("تم حفظ الصور بنجاح");
                     resetImagesSection();
+                    // إعادة تحميل البيانات لعرض الصور الجديدة
+                    fetchData(currentBarcode);
                 } else {
                     throw new Error(result.message || "فشل في حفظ الصور");
                 }
@@ -516,27 +496,13 @@
             for (let i = 1; i <= 3; i++) {
                 const preview = document.getElementById(`image-preview-${i}`);
                 preview.style.backgroundImage = '';
-                const existingTimestamp = preview.querySelector('.image-timestamp');
-                if (existingTimestamp) {
-                    preview.removeChild(existingTimestamp);
-                }
                 document.getElementById(`image-input-${i}`).value = '';
             }
             uploadedImages = [null, null, null];
-            imageTimestamps = [null, null, null];
             imagesSection.style.display = 'none';
             addImagesBtn.style.display = 'inline-block';
             saveImagesBtn.style.display = 'none';
             cancelImagesBtn.style.display = 'none';
-        }
-
-        function formatDateTime(date) {
-            const options = {
-                year: 'numeric', month: '2-digit', day: '2-digit',
-                hour: '2-digit', minute: '2-digit', second: '2-digit',
-                hour12: true
-            };
-            return new Intl.DateTimeFormat('ar-EG', options).format(date);
         }
 
         // --- الأحداث الأصلية ---
@@ -727,9 +693,12 @@
                 errorMsg.style.display = "none";
                 resultDiv.style.display = "none";
                 imagesSection.style.display = "none";
+                existingImagesSection.style.display = "none";
+                
                 const response = await fetch(`${API_URL}?barcode=${encodeURIComponent(barcode)}`);
                 const data = await response.json();
                 loading.style.display = "none";
+                
                 if (data.status === "error") throw new Error(data.message);
 
                 originalData = {
@@ -766,6 +735,24 @@
                 document.getElementById('location').value = data["Location"] || "";
                 document.getElementById('owning-dept').value = data["Owning Dept."] || "";
                 document.getElementById('business-operating-area').value = data["Business+Operating Area"] || "";
+
+                // عرض الصور الموجودة إن وجدت
+                existingImagesContainer.innerHTML = '';
+                if (data.Images && data.Images.length > 0) {
+                    existingImagesSection.style.display = 'block';
+                    
+                    data.Images.forEach((img, index) => {
+                        const imgBox = document.createElement('div');
+                        imgBox.className = 'image-upload-box';
+                        imgBox.innerHTML = `
+                            <div class="image-preview" style="background-image: url(${img.url})"></div>
+                            <div class="image-info">${img.description}</div>
+                        `;
+                        existingImagesContainer.appendChild(imgBox);
+                    });
+                } else {
+                    existingImagesSection.style.display = 'none';
+                }
 
                 resultDiv.style.display = "block";
                 document.getElementById('edit-controls').style.display = "block";
