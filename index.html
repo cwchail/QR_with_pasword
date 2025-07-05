@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>نظام مسح QR Code</title>
+    <title>نظام مسح QR Code مع التاريخ والوقت</title>
     <script src="https://cdn.jsdelivr.net/npm/jsqr/dist/jsQR.min.js"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         body {
@@ -171,7 +172,6 @@
             border: 1px solid #ddd;
             margin-top: 10px;
         }
-        /* أنماط قسم الصور */
         #images-section, #existing-images-section {
             margin-top: 30px;
             display: none;
@@ -298,7 +298,7 @@
                 <span class="field-label">الرقم التسلسلي:</span>
                 <input type="text" class="editable field-value" id="serial-number" disabled>
             </div>
-            <div class="product-field">
+                        <div class="product-field">
                 <span class="field-label">نوع الكائن:</span>
                 <input type="text" class="editable field-value" id="object-type" disabled>
             </div>
@@ -315,9 +315,8 @@
                 <input type="text" class="editable field-value" id="business-operating-area" disabled>
             </div>
 
-            <!-- قسم عرض الصور الموجودة -->
             <div id="existing-images-section">
-                <h3>الصور التوثيقية</h3>
+                <h3>آخر 3 صور توثيقية</h3>
                 <div id="existing-images-container" class="image-upload-container"></div>
             </div>
         </div>
@@ -329,7 +328,6 @@
             <button id="add-images-btn">إضافة صور</button>
         </div>
 
-        <!-- قسم إضافة الصور الجديدة -->
         <div id="images-section">
             <h3>إضافة صور توثيقية جديدة</h3>
             <div class="image-upload-container">
@@ -357,7 +355,6 @@
         </div>
     </div>
 
-    <!-- Modal for PDF Preview -->
     <div id="pdf-modal" class="modal">
         <div class="modal-content">
             <span class="close">&times;</span>
@@ -368,7 +365,7 @@
     </div>
 
     <script>
-        const API_URL = "https://script.google.com/macros/s/AKfycbwXVJo6Ra7q-R7WpE6uDezHLUWhgioXH_cVOD1QCzGBV7Dmsdy8zPhlL-kA-jagBrkX/exec"; 
+        const API_URL = "https://script.google.com/macros/s/AKfycbxoxrm9dsHWqb-i8bZewFxCfyfg_rfwvu_fJDUW3vkoQkFz0m5iEK45tejcSILsi6RX/exec"; 
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
@@ -443,8 +440,16 @@
                 const imageUrls = [];
                 for (let i = 0; i < uploadedImages.length; i++) {
                     if (uploadedImages[i]) {
+                        const canvas = await addDateTimeToImage(uploadedImages[i]);
+                        
+                        const blob = await new Promise(resolve => {
+                            canvas.toBlob(resolve, 'image/jpeg', 0.9);
+                        });
+                        
                         const formData = new FormData();
-                        formData.append('image', uploadedImages[i]);
+                        const now = new Date();
+                        const dateTimeStr = now.toISOString().slice(0,16).replace('T','_');
+                        formData.append('image', blob, `image_${i+1}_${dateTimeStr}.jpg`);
                         
                         const response = await fetch('https://api.imgbb.com/1/upload?key=6ecffd3e45da90b96112d1595746ebea', {
                             method: 'POST',
@@ -455,7 +460,7 @@
                         if (result.success) {
                             imageUrls.push({
                                 url: result.data.url,
-                                description: `صورة ${i+1} للمعدة`
+                                description: `صورة ${i+1} للمعدة - ${now.toLocaleString('ar-EG')}`
                             });
                         } else {
                             throw new Error("فشل في تحميل الصور");
@@ -782,6 +787,51 @@
         function showError(message) {
             errorMsg.textContent = message;
             errorMsg.style.display = "block";
+        }
+
+        // دالة إضافة التاريخ والوقت على الصورة
+        async function addDateTimeToImage(imageFile) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const img = new Image();
+                    img.onload = function() {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        const ctx = canvas.getContext('2d');
+                        
+                        // رسم الصورة الأصلية
+                        ctx.drawImage(img, 0, 0);
+                        
+                        // إعداد النص للتاريخ والوقت
+                        ctx.font = 'Bold 24px Arial';
+                        ctx.fillStyle = 'red';
+                        ctx.strokeStyle = 'white';
+                        ctx.lineWidth = 2;
+                        ctx.textAlign = 'right';
+                        ctx.textBaseline = 'bottom';
+                        
+                        // الحصول على التاريخ والوقت الحالي
+                        const now = new Date();
+                        const dateTimeString = now.toLocaleString('ar-EG', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        });
+                        
+                        // إضافة تأثير الظل للنص
+                        ctx.strokeText(dateTimeString, canvas.width - 15, canvas.height - 15);
+                        ctx.fillText(dateTimeString, canvas.width - 15, canvas.height - 15);
+                        
+                        resolve(canvas);
+                    };
+                    img.src = event.target.result;
+                };
+                reader.readAsDataURL(imageFile);
+            });
         }
     </script>
 </body>
